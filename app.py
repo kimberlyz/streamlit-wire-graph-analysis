@@ -17,16 +17,14 @@ plot_font_size = 20
 
 
 # ===========================================================
-# Reading CSV Files from a Directory
+# Reading CSV Files from Uploaded Files
 # ===========================================================
 @st.cache_data
-def load_csvs_from_folder(folder_path):
-    csv_files = [f for f in os.listdir(folder_path) if f.endswith(".CSV")]
-
+def load_csvs_from_uploaded_files(uploaded_files):
     graphs_dict = {}
-    for filename in csv_files:
-        file_path = os.path.join(folder_path, filename)
-        df = pd.read_csv(file_path, skiprows=2)
+    for uploaded_file in uploaded_files:
+        df = pd.read_csv(uploaded_file, skiprows=2)
+        filename = uploaded_file.name
         file_graph_data = FileGraph(
             filename, df.rename(columns={df.columns[0]: x_col, df.columns[1]: y_col})
         )
@@ -303,14 +301,18 @@ def get_line_graph(graphs_dict, filenames):
 st.title("Directory File Listers")
 
 st.markdown(f"#### Enter the path to a directory:")
-directory = st.text_input("Enter the path to a directory:", label_visibility="hidden")
+# directory = st.text_input("Enter the path to a directory:", label_visibility="hidden")
 
 st.sidebar.title("Histogram Bin Values")
 
-if directory:
+uploaded_files = st.file_uploader(
+    "Choose CSV files", accept_multiple_files=True, type="csv"
+)
+
+if uploaded_files:
     try:
         # Load data
-        graphs_dict = load_csvs_from_folder(directory)
+        graphs_dict = load_csvs_from_uploaded_files(uploaded_files)
         st.markdown(f"#### Loaded {len(graphs_dict)} CSV files.")
 
         if st.button("Reload Data From Folder"):
