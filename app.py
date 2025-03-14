@@ -298,11 +298,7 @@ def get_line_graph(graphs_dict, filenames):
 # ===========================================================
 # App Start
 # ===========================================================
-st.title("Directory File Listers")
-
-st.markdown(f"#### Enter the path to a directory:")
-# directory = st.text_input("Enter the path to a directory:", label_visibility="hidden")
-
+st.title("Wire Graph Analysis")
 st.sidebar.title("Histogram Bin Values")
 
 uploaded_files = st.file_uploader(
