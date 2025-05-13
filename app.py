@@ -14,6 +14,7 @@ plt.rcParams.update({"font.size": 15})
 x_col = "time"
 y_col = "ohm"
 plot_font_size = 20
+max_x_threshold = 2 * 1e-10
 
 
 # ===========================================================
@@ -53,7 +54,7 @@ def interpolate_x_value(coord1, coord2, target_y):
 # Find index where y is >= 52, and then get the two closest points + or - 1 index
 def get_closest_points_to_y(df, x_col, y_col, target_y):
     # Find the index where y is greater than or equal to the target y
-    idx = df[df[y_col] >= target_y].index[0]
+    idx = df[(df[y_col] >= target_y) & (df[x_col] > max_x_threshold)].index[0]
 
     # Get the two closest points to the target y
     closest_points_df = df.iloc[idx - 1 : idx + 1]
@@ -79,7 +80,7 @@ def get_histogram_and_bins(graphs_dict, num_bins):
     x_values = [graph.x_at_target_y for graph in graphs]
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f"{x * 1e12} ps"))
+    ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f"{round(x * 1e12, 2)} ps"))
 
     counts, bins, patches = ax.hist(
         x_values, bins=num_bins, edgecolor="black", alpha=0.7
@@ -122,7 +123,6 @@ def get_peak_xy_coord(df, x_col, y_col, x_threshold):
 
 
 def set_peak_xy_coords(graphs_dict):
-    max_x_threshold = 2 * 1e-10
     for graph in graphs_dict.values():
         df = graph.df
         peak_xy = get_peak_xy_coord(df, "time", "ohm", max_x_threshold)
