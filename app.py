@@ -235,6 +235,11 @@ def get_scatter_plot(bin_data, bin_num):
 # ===========================================================
 # Plot Line Graphs
 # ===========================================================
+def get_image_filename(filenames):
+    filenames = [filename.removesuffix('.CSV') for filename in filenames]
+    filenames.sort()
+    return '_'.join(filenames)
+
 def get_line_graph(graphs_dict, filenames):
     fig = go.Figure()
 
@@ -358,7 +363,13 @@ if uploaded_files:
         )
 
         line_graph = get_line_graph(graphs_dict, selected_filenames)
-        st.plotly_chart(line_graph)
+        config = {
+            "toImageButtonOptions": {
+                "format": "jpeg",
+                "filename": get_image_filename(selected_filenames),
+            }
+        }
+        st.plotly_chart(line_graph, config=config)
 
     except Exception as e:
         print("got here", e)
