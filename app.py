@@ -16,6 +16,15 @@ y_col = "ohm"
 plot_font_size = 20
 max_x_threshold = 2 * 1e-10
 
+if 'matched_filenames' not in st.session_state:
+    st.session_state.matched_filenames = []
+
+def match_filenames(filenames):
+    st.session_state.matched_filenames.append((filenames[0], filenames[1]))
+
+def clear_data():
+    st.cache_data.clear()
+    st.session_state.matched_filenames = []
 
 # ===========================================================
 # Reading CSV Files from Uploaded Files
@@ -31,6 +40,18 @@ def load_csvs_from_uploaded_files(uploaded_files):
         )
         graphs_dict[filename] = file_graph_data
     return graphs_dict
+
+
+# ===========================================================
+# Filter out matched graphs
+# ===========================================================
+def filter_out_matched_graphs(graphs_dict):
+    filenames = set()
+    for pair in st.session_state.matched_filenames:
+        filenames.add(pair[0])
+        filenames.add(pair[1])
+
+    return {k: v for k, v in graphs_dict.items() if k not in filenames}
 
 
 # ===========================================================
@@ -75,9 +96,8 @@ def set_x_values_at_target_y(graphs_dict, target_y):
 
 
 # Function to create a histogram and find x, y coordinates within each bin
-def get_histogram_and_bins(graphs_dict, num_bins):
-    graphs = [graph for graph in graphs_dict.values()]
-    x_values = [graph.x_at_target_y for graph in graphs]
+def get_histogram_and_bins(all_graphs_dict, graphs_dict, num_bins):
+    x_values = [graph.x_at_target_y for graph in all_graphs_dict.values()]
 
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f"{round(x * 1e12, 2)} ps"))
@@ -86,6 +106,13 @@ def get_histogram_and_bins(graphs_dict, num_bins):
         x_values, bins=num_bins, edgecolor="black", alpha=0.7
     )
 
+    # Update histogram if we've already removed some graphs
+    if len(graphs_dict) != len(all_graphs_dict):
+        remaining_x_values = [graph.x_at_target_y for graph in graphs_dict.values()]
+        counts, bins, patches = ax.hist(
+            remaining_x_values, bins=bins, edgecolor="black", alpha=0.5, color="purple"
+        )
+
     ax.bar_label(patches, labels=[f"{int(c)}" for c in counts])
     ax.set_xlabel("X-axis Value")
     ax.set_ylabel("Frequency")
@@ -93,6 +120,8 @@ def get_histogram_and_bins(graphs_dict, num_bins):
     ax.grid(True)
 
     # Find graphs in each bin
+    graphs = [graph for graph in graphs_dict.values()]
+    x_values = [graph.x_at_target_y for graph in graphs]
     bin_indices = np.digitize(x_values, bins)
     bin_data = {i: [] for i in range(1, len(bins))}
 
@@ -313,16 +342,20 @@ uploaded_files = st.file_uploader(
 if uploaded_files:
     try:
         # Load data
-        graphs_dict = load_csvs_from_uploaded_files(uploaded_files)
-        st.markdown(f"#### Loaded {len(graphs_dict)} CSV files.")
+        all_graphs_dict = load_csvs_from_uploaded_files(uploaded_files)
+        num_all_files = len(all_graphs_dict)
+        st.markdown(f"#### Loaded {num_all_files} CSV files.")
 
-        if st.button("Reload Data From Folder"):
-            st.cache_data.clear()
-            st.rerun()
+        num_matched_files = len(st.session_state.matched_filenames) * 2
+        graphs_dict = filter_out_matched_graphs(all_graphs_dict)
+        num_remaining_files = len(graphs_dict)
+        st.markdown(f'##### Matched {num_matched_files} Files. {num_remaining_files} Remaining.')
+
+        st.button("Clear Data", on_click=clear_data)
 
         # Extract features from graphs
-        set_x_values_at_target_y(graphs_dict, 52)
-        set_peak_xy_coords(graphs_dict)
+        set_x_values_at_target_y(all_graphs_dict, 52)
+        set_peak_xy_coords(all_graphs_dict)
 
         # Display histogram and bin data
         st.markdown(f"#### How many bins do you want to see?")
@@ -330,7 +363,7 @@ if uploaded_files:
             "How many bins do you want to see?", 1, 20, 10, label_visibility="hidden"
         )
 
-        bin_contents = get_histogram_and_bins(graphs_dict, num_bins)
+        bin_contents = get_histogram_and_bins(all_graphs_dict, graphs_dict, num_bins)
         histogram = bin_contents["histogram"]
         bin_data = bin_contents["bin_data"]
 
@@ -358,7 +391,6 @@ if uploaded_files:
         selected_filenames = st.multiselect(
             "Which graphs would you like to see in a line graph?",
             filenames,
-            filenames[0],
             label_visibility="hidden",
         )
 
@@ -370,6 +402,11 @@ if uploaded_files:
             }
         }
         st.plotly_chart(line_graph, config=config)
+
+        button_name = 'Match Cables: ' + ', '.join(selected_filenames)
+        st.button(button_name, on_click=match_filenames, args=(sorted(selected_filenames),), disabled=len(selected_filenames) != 2)
+
+        st.write(st.session_state.matched_filenames)
 
     except Exception as e:
         print("got here", e)
