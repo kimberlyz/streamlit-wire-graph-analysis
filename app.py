@@ -183,16 +183,23 @@ def get_axis_ranges_for_scatter_plot():
     return (xaxis_range, yaxis_range)
 
 
-def get_scatter_plot(bin_data, bin_num):
+def get_scatter_plot(bin_data, bin_num, should_see_neighboring_bins):
     fig = go.Figure()
 
     custom_colors = ["orange", "green", "blue"]
 
-    bin_nums = get_surrounding_bin_nums(bin_data, bin_num)
+    if should_see_neighboring_bins:
+        bin_nums = get_surrounding_bin_nums(bin_data, bin_num)
+    else:
+        bin_nums = [bin_num]
 
     for i in range(len(bin_nums)):
         bin_num = bin_nums[i]
-        color = custom_colors[i % len(custom_colors)]
+
+        if should_see_neighboring_bins:
+            color = custom_colors[i % len(custom_colors)]
+        else:
+            color = custom_colors[1]
         x = []
         y = []
         labels = []
@@ -374,15 +381,16 @@ if uploaded_files:
 
         # Display scatterPlot for selected bin
         st.markdown(
-            f"#### Which bin with its neighboring bins would you like to see in a scatterplot?"
+            f"#### Which bin would you like to see in a scatterplot?"
         )
         selected_bin_num = st.selectbox(
-            "Which bin with its neighboring bins would you like to see in a scatterplot?",
+            "Which bin would you like to see in a scatterplot?",
             bin_data.keys(),
             label_visibility="hidden",
         )
+        should_see_neighboring_bins = st.checkbox("See neighboring bins")
 
-        scatter_plot = get_scatter_plot(bin_data, selected_bin_num)
+        scatter_plot = get_scatter_plot(bin_data, selected_bin_num, should_see_neighboring_bins)
         st.plotly_chart(scatter_plot)
 
         # Display line graphs for filenames
@@ -395,17 +403,19 @@ if uploaded_files:
         )
 
         line_graph = get_line_graph(graphs_dict, selected_filenames)
-        config = {
-            "toImageButtonOptions": {
-                "format": "jpeg",
-                "filename": get_image_filename(selected_filenames),
-            }
-        }
-        st.plotly_chart(line_graph, config=config)
+        img_bytes = line_graph.to_image(format="jpeg", width=800, height=400)
 
-        button_name = 'Match Cables: ' + ', '.join(selected_filenames)
-        st.button(button_name, on_click=match_filenames, args=(sorted(selected_filenames),), disabled=len(selected_filenames) != 2)
-
+        button_name = 'Match Cables and Save Image: ' + ', '.join(selected_filenames)
+        sorted_filenames = sorted(selected_filenames)
+        st.download_button(
+            label=button_name,
+            data=img_bytes,
+            file_name=get_image_filename(sorted_filenames),
+            mime="image/jpeg",
+            disabled=len(sorted_filenames) != 2,
+            on_click=match_filenames,
+            args=(sorted_filenames,)
+        )
         st.write(st.session_state.matched_filenames)
 
     except Exception as e:
