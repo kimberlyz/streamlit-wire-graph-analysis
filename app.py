@@ -53,6 +53,40 @@ def filter_out_matched_graphs(graphs_dict):
 
     return {k: v for k, v in graphs_dict.items() if k not in filenames}
 
+# ===========================================================
+# Building a Histogram of Y-Values at Target X
+# ===========================================================
+def interpolate_y_value(coord1, coord2, target_x):
+    x1 = coord1.x
+    y1 = coord1.y
+
+    x2 = coord2.x
+    y2 = coord2.y
+
+    y_at_target_x = y1 + (y2 - y1) * (target_x - x1) / (x2 - x1)
+
+    return y_at_target_x
+
+# Find index where x is >= some value, and then get the two closest points + or - 1 index
+def get_closest_points_to_x(df, x_col, y_col, target_x):
+    # Find the index where x is greater than or equal to the target x
+    idx = df[df[x_col] >= target_x].index[0]
+
+    # Get the two closest points to the target x
+    closest_points_df = df.iloc[idx - 1 : idx + 1]
+
+    return [
+        Point(row[x_col], row[y_col]) for _, row in closest_points_df.iterrows()
+    ]
+
+def set_y_values_at_target_x(graphs_dict, target_x):
+    for graph_data in graphs_dict.values():
+        df = graph_data.df
+        closest_points = get_closest_points_to_x(df, x_col, y_col, target_x)
+        y_at_target_x = interpolate_y_value(
+            closest_points[0], closest_points[1], target_x
+        )
+        graph_data.y_at_target_x = y_at_target_x
 
 # ===========================================================
 # Building a Histogram of X-Values at Target Y
@@ -81,7 +115,7 @@ def get_closest_points_to_y(df, x_col, y_col, target_y):
     closest_points_df = df.iloc[idx - 1 : idx + 1]
 
     return [
-        Point(row[x_col], row[y_col]) for index, row in closest_points_df.iterrows()
+        Point(row[x_col], row[y_col]) for _, row in closest_points_df.iterrows()
     ]
 
 
@@ -94,6 +128,16 @@ def set_x_values_at_target_y(graphs_dict, target_y):
         )
         graph_data.x_at_target_y = x_at_target_y
 
+def get_bin_data(graphs, bin_indices, num_bins):
+    bin_data = {i: [] for i in range(1, num_bins)}
+
+    for i, bin_index in enumerate(bin_indices):
+        if bin_index < num_bins:
+            bin_data[bin_index].append(graphs[i])
+        elif bin_index == num_bins:
+            # Edge case for point on the right-most bin edge
+            bin_data[bin_index - 1].append(graphs[i])
+    return bin_data
 
 # Function to create a histogram and find x, y coordinates within each bin
 def get_histogram_and_bins(all_graphs_dict, graphs_dict, num_bins):
@@ -113,27 +157,40 @@ def get_histogram_and_bins(all_graphs_dict, graphs_dict, num_bins):
             remaining_x_values, bins=bins, edgecolor="black", alpha=0.5, color="purple"
         )
 
-    ax.bar_label(patches, labels=[f"{int(c)}" for c in counts])
-    ax.set_xlabel("X-axis Value")
+    ax.bar_label(patches, labels=[f"Bin{i+1}\n{int(c)}" for i, c in enumerate(counts)])
+    ax.set_xlabel("X-axis Value at Y=52")
     ax.set_ylabel("Frequency")
-    ax.set_title("Histogram of X-axis Values")
+    ax.set_title("Histogram of X-axis Values at Y=52\n")
     ax.grid(True)
 
     # Find graphs in each bin
     graphs = [graph for graph in graphs_dict.values()]
     x_values = [graph.x_at_target_y for graph in graphs]
     bin_indices = np.digitize(x_values, bins)
-    bin_data = {i: [] for i in range(1, len(bins))}
-
-    for i, bin_index in enumerate(bin_indices):
-        if bin_index < len(bins):
-            bin_data[bin_index].append(graphs[i])
-        elif bin_index == len(bins):
-            # Edge case for point on the right-most bin edge
-            bin_data[bin_index - 1].append(graphs[i])
+    bin_data = get_bin_data(graphs, bin_indices, len(bins))
 
     return {"histogram": fig, "bin_data": bin_data}
 
+def get_y_at_target_x_histogram_and_bins(graphs, num_bins):
+    y_values = [graph.y_at_target_x for graph in graphs]
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    counts, bins, patches = ax.hist(
+        y_values, bins=num_bins, edgecolor="black", alpha=0.7
+    )
+
+    ax.bar_label(patches, labels=[f"Bin{i+1}\n{int(c)}" for i, c in enumerate(counts)])
+    ax.set_xlabel("Y Value at X=250ps")
+    ax.set_ylabel("Frequency")
+    ax.set_title("Histogram of Y Values at X=250ps\n")
+    ax.grid(True)
+
+    # Find graphs in each bin
+    bin_indices = np.digitize(y_values, bins)
+    bin_data = get_bin_data(graphs, bin_indices, len(bins))
+
+    return {"histogram": fig, "bin_data": bin_data}
 
 # ===========================================================
 # Building Scatterplot of Peak XY Coordinate
@@ -362,6 +419,7 @@ if uploaded_files:
 
         # Extract features from graphs
         set_x_values_at_target_y(all_graphs_dict, 52)
+        set_y_values_at_target_x(all_graphs_dict, 250*1e-12)
         set_peak_xy_coords(all_graphs_dict)
 
         # Display histogram and bin data
@@ -378,6 +436,32 @@ if uploaded_files:
 
         for bin_num, graph_data in bin_data.items():
             st.sidebar.write(bin_num, [graph.filename for graph in graph_data])
+
+        should_further_segment_bins = st.checkbox("Enable Further Bin Segmentation")
+        if should_further_segment_bins:
+            st.markdown(
+                f"#### Which bin would you like to see segmented further?"
+            )
+            selected_bin_num = st.selectbox(
+                "Which bin with would you like to see segmented further?",
+                bin_data.keys(),
+                label_visibility="hidden",
+            )
+
+            num_bins = st.slider(
+                "How many bins do you want to see?",
+                1,
+                20,
+                10,
+                label_visibility="hidden",
+                key="num_bins_2"
+            )
+
+            bin_contents = get_y_at_target_x_histogram_and_bins(bin_data[selected_bin_num], num_bins)
+            histogram = bin_contents["histogram"]
+            bin_data = bin_contents["bin_data"]
+
+            st.pyplot(histogram)
 
         # Display scatterPlot for selected bin
         st.markdown(
