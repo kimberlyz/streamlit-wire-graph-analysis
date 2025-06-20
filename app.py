@@ -416,6 +416,9 @@ if uploaded_files:
             on_click=match_filenames,
             args=(sorted_filenames,)
         )
+
+        st.plotly_chart(line_graph, config={'modeBarButtonsToRemove': ['toImage']})
+
         st.write(st.session_state.matched_filenames)
 
     except Exception as e:
